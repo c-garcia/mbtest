@@ -1,11 +1,11 @@
 ﻿# encoding=utf-8
 import logging
-import subprocess  # nosec
+import platform
 import time
 from collections.abc import Sequence
 from pathlib import Path
 
-import platform
+import pexpect
 import requests
 from furl import furl
 from more_itertools import flatten
@@ -27,7 +27,7 @@ class MountebankServer(object):
     def __init__(self, executable=DEFAULT_MB_EXECUTABLE, port=2525, timeout=5):
         self.server_port = port
         try:
-            self.mb_process = subprocess.Popen([executable, "--port", str(port), "--debug"])  # nosec
+            self.mb_process = pexpect.spawn(executable, args=["--port", str(port), "--debug"])
             self._await_start(timeout)
             logger.info("Spawned mb process %s on port %s.", self.mb_process.pid, self.server_port)
         except OSError:
@@ -46,6 +46,7 @@ class MountebankServer(object):
         self.delete_imposters()
 
     def _await_start(self, timeout):
+        self.mb_process.expect("now taking orders", timeout=timeout)
         start_time = time.time()
 
         while time.time() - start_time < timeout:
@@ -93,13 +94,13 @@ class MountebankServer(object):
         return furl(self.server_url).add(path="{0}".format(imposter_port))
 
     def close(self):
-        self.mb_process.terminate()
+        self.mb_process.close()
         self.mb_process.wait()
         logger.info(
             "Terminated mb process %s on port %s status %s.",
             self.mb_process.pid,
             self.server_port,
-            self.mb_process.returncode,
+            self.mb_process.exitstatus,
         )
 
 
